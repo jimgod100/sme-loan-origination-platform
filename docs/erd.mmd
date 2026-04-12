@@ -1,0 +1,148 @@
+---
+title: SME Loan Origination Platform — Entity Relationship Diagram
+---
+erDiagram
+    USERS {
+        uuid id PK
+        varchar username UK
+        varchar email UK
+        varchar password_hash
+        varchar full_name
+        varchar role
+        boolean is_active
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    CUSTOMERS {
+        uuid id PK
+        varchar company_name
+        varchar unified_business_no UK
+        varchar legal_representative
+        varchar industry_code
+        date established_date
+        text registered_address
+        varchar contact_phone
+        varchar contact_email
+        varchar kyc_status
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    LOAN_APPLICATIONS {
+        uuid id PK
+        varchar application_no UK
+        uuid customer_id FK
+        uuid assigned_rm_id FK
+        numeric requested_amount
+        varchar requested_currency
+        int requested_tenor_months
+        varchar loan_purpose
+        varchar status
+        varchar onboarding_token UK
+        timestamptz onboarding_token_expires_at
+        timestamptz onboarding_completed_at
+        uuid reviewed_by_id FK
+        timestamptz reviewed_at
+        text review_notes
+        text decision_reason
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    APPLICATION_PARTIES {
+        uuid id PK
+        uuid application_id FK
+        varchar party_type
+        varchar full_name
+        varchar id_number
+        varchar nationality
+        numeric ownership_pct
+        boolean is_pep
+        timestamptz created_at
+    }
+
+    DOCUMENTS {
+        uuid id PK
+        uuid application_id FK
+        varchar document_type
+        varchar original_filename
+        varchar storage_key
+        varchar content_type
+        bigint file_size_bytes
+        varchar checksum_sha256
+        timestamptz uploaded_at
+        boolean is_deleted
+    }
+
+    EXTERNAL_CHECK_RESULTS {
+        uuid id PK
+        uuid application_id FK
+        varchar check_type
+        varchar provider_name
+        varchar status
+        jsonb request_payload
+        jsonb response_payload
+        varchar result_code
+        varchar risk_level
+        text summary
+        timestamptz requested_at
+        timestamptz completed_at
+        int duration_ms
+        timestamptz created_at
+    }
+
+    SCORE_RESULTS {
+        uuid id PK
+        uuid application_id FK
+        numeric total_score
+        varchar score_grade
+        jsonb score_breakdown
+        jsonb weight_config
+        varchar auto_decision
+        text decision_rationale
+        timestamptz scored_at
+        varchar scored_by_engine
+    }
+
+    LOAN_OFFERS {
+        uuid id PK
+        uuid application_id FK
+        numeric approved_amount
+        varchar currency
+        int tenor_months
+        numeric annual_interest_rate
+        numeric monthly_payment
+        numeric total_interest
+        numeric total_repayment
+        numeric origination_fee
+        date offer_valid_until
+        varchar offer_pdf_key
+        varchar status
+        timestamptz accepted_at
+        timestamptz declined_at
+        timestamptz created_at
+        timestamptz updated_at
+    }
+
+    REPAYMENT_SCHEDULES {
+        uuid id PK
+        uuid loan_offer_id FK
+        int installment_no
+        date due_date
+        numeric opening_balance
+        numeric principal_amount
+        numeric interest_amount
+        numeric total_payment
+        numeric closing_balance
+    }
+
+    CUSTOMERS ||--o{ LOAN_APPLICATIONS : "has"
+    USERS ||--o{ LOAN_APPLICATIONS : "assigned_rm"
+    USERS ||--o{ LOAN_APPLICATIONS : "reviewed_by"
+    LOAN_APPLICATIONS ||--o{ APPLICATION_PARTIES : "includes"
+    LOAN_APPLICATIONS ||--o{ DOCUMENTS : "has"
+    LOAN_APPLICATIONS ||--o{ EXTERNAL_CHECK_RESULTS : "produces"
+    LOAN_APPLICATIONS ||--o| SCORE_RESULTS : "generates"
+    LOAN_APPLICATIONS ||--o| LOAN_OFFERS : "results_in"
+    LOAN_OFFERS ||--o{ REPAYMENT_SCHEDULES : "has"
