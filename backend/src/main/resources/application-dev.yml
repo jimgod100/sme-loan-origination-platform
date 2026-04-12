@@ -1,0 +1,61 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  # DataSource — points to local/Docker PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/smeloan
+    username: smeloan
+    password: smeloan_pass
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      pool-name: SmeloanHikariPool
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # JPA — relax ddl-auto for fast dev iteration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  # Flyway — still runs migrations; ddl-auto=update is a safety net
+  flyway:
+    enabled: true
+    clean-on-validation-error: false
+
+# MinIO pointing to Docker service
+app:
+  minio:
+    endpoint: http://localhost:9000
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: smeloan-documents
+
+# Verbose logging for development
+logging:
+  level:
+    root: INFO
+    com.jimgod100: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql: TRACE
+  pattern:
+    console: "%d{HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n"
+
+# Expose all actuator endpoints in dev
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+  endpoint:
+    health:
+      show-details: always
