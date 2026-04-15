@@ -16,9 +16,15 @@ import com.smeloan.platform.disbursement.repository.LoanOfferRepository;
 import com.smeloan.platform.disbursement.repository.RepaymentScheduleRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
@@ -159,15 +165,76 @@ public class DisbursementServiceImpl implements DisbursementService {
     }
 
     // ------------------------------------------------------------------
-    // Contract PDF (stub)
+    // Contract PDF (PDFBox implementation)
     // ------------------------------------------------------------------
 
     @Override
+    @Transactional(readOnly = true)
     public byte[] generateContractPdf(Long applicationId) {
-        // TODO: Integrate a PDF generation library (e.g. iText, JasperReports, OpenPDF)
-        // This stub returns a minimal placeholder PDF byte array.
-        String placeholder = "LOAN CONTRACT - Application ID: " + applicationId + "\n[PDF generation not yet implemented]";
-        return placeholder.getBytes();
+        LoanOffer offer = loanOfferRepository.findByLoanApplicationId(applicationId)
+            .orElseThrow(() -> new ResourceNotFoundException(
+                "LoanOffer not found for application id: " + applicationId));
+
+        List<RepaymentSchedule> schedule =
+            repaymentScheduleRepository.findByLoanOfferIdOrderByInstallmentNumber(offer.getId());
+
+        try (PDDocument document = new PDDocument(); ByteArrayOutputStream out = new ByteArrayOutputStream()) {
+            PDPage page = new PDPage();
+            document.addPage(page);
+
+            try (PDPageContentStream content = new PDPageContentStream(document, page)) {
+                content.beginText();
+                content.setFont(PDType1Font.HELVETICA_BOLD, 18);
+                content.newLineAtOffset(50, 750);
+                content.showText("Loan Contract");
+
+                content.setFont(PDType1Font.HELVETICA, 11);
+                content.newLineAtOffset(0, -30);
+                content.showText("Application ID: " + applicationId);
+                content.newLineAtOffset(0, -15);
+                content.showText("Offer ID: " + offer.getId());
+                content.newLineAtOffset(0, -15);
+                content.showText("Approved Amount: " + offer.getApprovedAmount());
+                content.newLineAtOffset(0, -15);
+                content.showText("Interest Rate (annual): " + offer.getInterestRate());
+                content.newLineAtOffset(0, -15);
+                content.showText("Term (months): " + offer.getTermMonths());
+                content.newLineAtOffset(0, -15);
+                content.showText("Monthly Payment: " + offer.getMonthlyPayment());
+
+                content.newLineAtOffset(0, -30);
+                content.setFont(PDType1Font.HELVETICA_BOLD, 12);
+                content.showText("Repayment Schedule (first 12 instalments)");
+
+                content.setFont(PDType1Font.HELVETICA, 10);
+                content.newLineAtOffset(0, -18);
+                int maxLines = Math.min(12, schedule.size());
+                for (int i = 0; i < maxLines; i++) {
+                    RepaymentSchedule row = schedule.get(i);
+                    String line = String.format("#%d  %s  Principal: %s  Interest: %s  Balance: %s",
+                        row.getInstallmentNumber(),
+                        row.getDueDate(),
+                        row.getPrincipal(),
+                        row.getInterest(),
+                        row.getBalance());
+                    content.showText(line);
+                    content.newLineAtOffset(0, -14);
+                }
+
+                content.newLineAtOffset(0, -24);
+                content.showText("Borrower Signature: _____________________________");
+                content.newLineAtOffset(0, -18);
+                content.showText("Lender Representative: _________________________");
+
+                content.endText();
+            }
+
+            document.save(out);
+            return out.toByteArray();
+        } catch (IOException e) {
+            log.error("Failed to generate contract PDF for application {}", applicationId, e);
+            throw new BusinessException("Failed to generate contract PDF", e);
+        }
     }
 
     // ------------------------------------------------------------------
