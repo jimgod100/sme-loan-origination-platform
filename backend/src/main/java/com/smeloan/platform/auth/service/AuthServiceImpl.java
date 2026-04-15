@@ -7,18 +7,22 @@ import com.smeloan.platform.auth.entity.User;
 import com.smeloan.platform.auth.repository.UserRepository;
 import com.smeloan.platform.common.exception.BusinessException;
 import com.smeloan.platform.common.exception.ResourceNotFoundException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.time.Instant;
+import java.util.Date;
+
 /**
  * Implementation of {@link AuthService} providing JWT-based authentication.
- *
- * <p>JWT signing/validation is stubbed with TODO placeholders — integrate
- * a library such as {@code jjwt} or {@code spring-security-oauth2-resource-server}
- * to complete the implementation.</p>
  */
 @Slf4j
 @Service
@@ -30,6 +34,14 @@ public class AuthServiceImpl implements AuthService {
 
     /** Token lifetime: 8 hours expressed in seconds. */
     private static final long TOKEN_EXPIRY_SECONDS = 8 * 60 * 60L;
+    private static final String JWT_ISSUER = "sme-loan-platform";
+
+    /**
+     * Demo-only HMAC secret key for signing JWTs.
+     * In a real deployment, this must be externalised to configuration and rotated regularly.
+     */
+    private static final String JWT_SECRET =
+        "change-me-demo-secret-key-for-sme-loan-platform-256-bit-equivalent";
 
     @Override
     @Transactional(readOnly = true)
@@ -45,8 +57,7 @@ public class AuthServiceImpl implements AuthService {
             throw new BusinessException("Invalid username or password");
         }
 
-        // TODO: Replace stub token with a real JWT signed with RS256/HS256
-        String token = generateStubToken(user);
+        String token = generateJwtToken(user);
 
         UserInfo userInfo = toUserInfo(user);
         log.info("User '{}' logged in successfully", user.getUsername());
@@ -76,13 +87,22 @@ public class AuthServiceImpl implements AuthService {
         );
     }
 
-    /**
-     * TODO: Replace with real JWT generation (e.g. jjwt).
-     * This stub encodes minimal user info for development purposes only.
-     */
-    private String generateStubToken(User user) {
-        // Stub: base64-encode a simple payload — NOT secure for production
-        String payload = user.getId() + ":" + user.getUsername() + ":" + user.getRole().name();
-        return java.util.Base64.getEncoder().encodeToString(payload.getBytes());
+    private String generateJwtToken(User user) {
+        Instant now = Instant.now();
+        Instant expiry = now.plusSeconds(TOKEN_EXPIRY_SECONDS);
+
+        SecretKey key = Keys.hmacShaKeyFor(JWT_SECRET.getBytes(StandardCharsets.UTF_8));
+
+        return Jwts.builder()
+            .setSubject(user.getUsername())
+            .setId(user.getId().toString())
+            .setIssuer(JWT_ISSUER)
+            .setIssuedAt(Date.from(now))
+            .setExpiration(Date.from(expiry))
+            .claim("role", user.getRole().name())
+            .claim("fullName", user.getFullName())
+            .claim("department", user.getDepartment())
+            .signWith(key, SignatureAlgorithm.HS256)
+            .compact();
     }
 }
